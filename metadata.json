@@ -1,0 +1,6 @@
+{
+  "name": "Prompt Render",
+  "description": "Một công cụ giúp người sáng tạo video tạo prompt (câu lệnh) cho các cảnh video bằng cách sử dụng Gemini API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
