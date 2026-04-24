@@ -36,9 +36,7 @@ jobs:
         run: npm run build
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          VEO_API_KEY: ${{ secrets.VEO_API_KEY }}
-          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          GROK_PROXY_URL: ${{ secrets.GROK_PROXY_URL }}
+          VEO_LABS_PROXY_URL: ${{ secrets.VEO_LABS_PROXY_URL }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
