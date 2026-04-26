@@ -249,18 +249,24 @@ app.post('/api/veo/generate', async (req, res) => {
 });
 
 /**
- * GET /api/veo/status/:operationName
+ * POST /api/veo/status
  * 
  * Poll video generation status using the operation name.
  * Calls aisandbox API to check if the video is ready.
  */
-app.get('/api/veo/status/:operationName', async (req, res) => {
-  const { operationName } = req.params;
+app.post('/api/veo/status', async (req, res) => {
+  const { operationName } = req.body;
   const labsApiKey = process.env.LABS_API_KEY || '';
+
+  if (!operationName) {
+    return res.status(400).json({ success: false, error: 'operationName is required' });
+  }
 
   try {
     const keyParam = labsApiKey ? `?key=${labsApiKey}` : '';
-    const url = `${AISANDBOX_BASE}/v1/operations/${operationName}${keyParam}`;
+    // Xử lý trường hợp operationName bị dính tiền tố 'operations/'
+    const cleanOperationName = operationName.startsWith('operations/') ? operationName : `operations/${operationName}`;
+    const url = `${AISANDBOX_BASE}/v1/${cleanOperationName}${keyParam}`;
 
     const headers = getLabsHeaders();
 

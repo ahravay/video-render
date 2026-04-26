@@ -166,10 +166,9 @@ export default {
         return await handleGenerate(request, env);
       }
 
-      // GET /status/:operationName — Poll video status
-      if (path.startsWith('/status/') && request.method === 'GET') {
-        const operationName = path.replace('/status/', '');
-        return await handleStatus(operationName, request, env);
+      // POST /status — Poll video status
+      if (path === '/status' && request.method === 'POST') {
+        return await handleStatus(request, env);
       }
 
       // GET /config — Check if Labs API is configured
@@ -287,12 +286,20 @@ async function handleGenerate(request, env) {
   return jsonResponse({ success: true, status: 'complete', data }, 200, request);
 }
 
-// ==================== /status/:operationName ====================
+// ==================== /status ====================
 
-async function handleStatus(operationName, request, env) {
+async function handleStatus(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const { operationName } = body;
+  
+  if (!operationName) {
+    return jsonResponse({ success: false, error: 'operationName is required' }, 400, request);
+  }
+
   const apiKey = env.LABS_API_KEY || '';
   const keyParam = apiKey ? `?key=${apiKey}` : '';
-  const apiUrl = `${AISANDBOX_BASE}/v1/operations/${operationName}${keyParam}`;
+  const cleanOperationName = operationName.startsWith('operations/') ? operationName : `operations/${operationName}`;
+  const apiUrl = `${AISANDBOX_BASE}/v1/${cleanOperationName}${keyParam}`;
 
   const headers = getLabsHeaders(env);
 

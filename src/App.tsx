@@ -63,7 +63,11 @@ const generateVideoWithVeoLabs = async (prompt: string, refImages: { url: string
     while (Date.now() - startTime < maxPollingTime) {
       await new Promise(resolve => setTimeout(resolve, 8000));
 
-      const pollResponse = await fetch(`${LABS_API_BASE}/status/${result.operationName}`);
+      const pollResponse = await fetch(`${LABS_API_BASE}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationName: result.operationName })
+      });
       if (!pollResponse.ok) continue;
 
       const pollData = await pollResponse.json();
