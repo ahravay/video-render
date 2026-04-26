@@ -83,7 +83,7 @@ async function uploadImageToLabs(base64Data: string) {
   const requestBody = {
     clientContext: {
       projectId: process.env.LABS_PROJECT_ID,
-      tool: "PINHOLE"
+      tool: "KINETIC"
     },
     imageBytes: cleanBase64
   };
@@ -167,7 +167,7 @@ app.post('/api/veo/generate', async (req, res) => {
       },
       clientContext: {
         projectId: labsProjectId,
-        tool: 'PINHOLE',
+        tool: 'KINETIC',
         userPaygateTier: 'PAYGATE_TIER_TWO',
         sessionId,
       },

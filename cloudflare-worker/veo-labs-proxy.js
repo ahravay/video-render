@@ -119,7 +119,7 @@ async function uploadImageToLabs(base64Data, env) {
   const requestBody = {
     clientContext: {
       projectId: env.LABS_PROJECT_ID,
-      tool: "PINHOLE"
+      tool: "KINETIC"
     },
     imageBytes: cleanBase64
   };
@@ -233,7 +233,7 @@ async function handleGenerate(request, env) {
     },
     clientContext: {
       projectId: env.LABS_PROJECT_ID,
-      tool: 'PINHOLE',
+      tool: 'KINETIC',
       userPaygateTier: 'PAYGATE_TIER_TWO',
       sessionId,
     },
