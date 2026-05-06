@@ -748,6 +748,7 @@ export default function App() {
               )}
             </div>
           ) : activeTab === 'scene' ? (
+            <div className="flex flex-col flex-1">
               <div className="flex flex-col md:flex-row gap-5 mb-5">
                 <div className="flex flex-col gap-2 flex-[0.7]">
                   <label htmlFor="scenePromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
