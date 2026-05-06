@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, RotateCcw, Sparkles, Check, Video, Download, Key, ImagePlus, X, Maximize2 } from 'lucide-react';
+import { Copy, RotateCcw, Sparkles, Check, Video, Download, Key, ImagePlus, X, Maximize2, FileVideo } from 'lucide-react';
 import { GoogleGenAI, Type } from '@google/genai';
 
 declare global {
@@ -149,7 +149,7 @@ const VideoBlock = ({ prompt, label, refImages }: { prompt: string, label: strin
 
       setVideos(successfulVideos);
       const labsCount = successfulVideos.filter(v => v.source === 'labs').length;
-      
+
       if (successfulVideos.length < 4) {
         setError(`Tạo thành công ${successfulVideos.length}/4 video từ Google Labs.`);
       }
@@ -253,7 +253,16 @@ const VideoBlock = ({ prompt, label, refImages }: { prompt: string, label: strin
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'scene' | 'ending'>('scene');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'scene' | 'ending'>('analysis');
+
+  // Tab Analysis state
+  const [analysisVideoFile, setAnalysisVideoFile] = useState<File | null>(null);
+  const [analysisVideoUrl, setAnalysisVideoUrl] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisScenePrompts, setAnalysisScenePrompts] = useState<string[]>([]);
+  const [isGeneratingScenesFromAnalysis, setIsGeneratingScenesFromAnalysis] = useState(false);
+  const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
 
   // Tab 1 state
   const [scenePrompt, setScenePrompt] = useState('');
@@ -277,6 +286,163 @@ export default function App() {
     setEndingPrompt('');
     setEndingResult('');
     setRefImages([]);
+    setAnalysisVideoFile(null);
+    setAnalysisVideoUrl(null);
+    setGeminiFileUri(null);
+    setAnalysisResult('');
+    setAnalysisScenePrompts([]);
+  };
+
+  const uploadVideoToGemini = async (file: File) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('Chưa cấu hình GEMINI_API_KEY');
+
+    const initRes = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': file.size.toString(),
+        'X-Goog-Upload-Header-Content-Type': file.type,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ file: { displayName: file.name } })
+    });
+
+    if (!initRes.ok) throw new Error('Khởi tạo upload thất bại');
+    const uploadUrl = initRes.headers.get('x-goog-upload-url');
+    if (!uploadUrl) throw new Error('Không lấy được URL upload');
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'upload, finalize',
+        'X-Goog-Upload-Offset': '0',
+      },
+      body: file
+    });
+
+    if (!uploadRes.ok) throw new Error('Upload video thất bại');
+    const fileInfo = await uploadRes.json();
+    return fileInfo.file;
+  };
+
+  const pollVideoProcessingState = async (fileName: string) => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    let state = 'PROCESSING';
+    while (state === 'PROCESSING') {
+      await new Promise(r => setTimeout(r, 5000));
+      const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/files/${fileName.split('/').pop()}?key=${apiKey}`);
+      if (!checkRes.ok) throw new Error('Lỗi kiểm tra trạng thái video');
+      const checkData = await checkRes.json();
+      state = checkData.state;
+      if (state === 'FAILED') throw new Error('Xử lý video thất bại');
+    }
+  };
+
+  const analyzeVideo = async () => {
+    if (!analysisVideoFile) return;
+    if (!ai) {
+      alert('Chưa cấu hình API Key. Vui lòng thiết lập GEMINI_API_KEY.');
+      return;
+    }
+    setIsAnalyzing(true);
+    setAnalysisResult('');
+    setAnalysisScenePrompts([]);
+    try {
+      let currentFileUri = geminiFileUri;
+
+      if (!currentFileUri) {
+        const uploadedFile = await uploadVideoToGemini(analysisVideoFile);
+        await pollVideoProcessingState(uploadedFile.name);
+        currentFileUri = uploadedFile.uri;
+        setGeminiFileUri(currentFileUri);
+      }
+
+
+      const prompt = `Hãy phân tích chi tiết video này để tôi có thể tạo ra các video có phong cách và nội dung tương tự. Vui lòng cung cấp: 1. Mô tả chi tiết ngoại hình, trang phục, và đặc điểm nhận dạng của các nhân vật chính để có thể tái tạo lại một cách nhất quán. 2. Tóm tắt nội dung, bối cảnh, cốt truyện, và phong cách hình ảnh (art style, lighting, camera angles) của video. 3. Phân tích cách video triển khai nội dung để tạo điểm nhấn thu hút người xem (hook, pacing, trend). 4. Đưa ra các chỉ dẫn cụ thể để xây dựng prompt tái hiện lại cảm giác và chất lượng của video gốc.`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { fileData: { fileUri: currentFileUri, mimeType: analysisVideoFile.type } },
+              { text: prompt }
+            ]
+          }
+        ]
+      });
+
+      if (response.text) {
+        setAnalysisResult(response.text);
+      }
+    } catch (error: any) {
+      console.error('Error analyzing video:', error);
+      alert(error.message || 'Có lỗi xảy ra khi phân tích video. Vui lòng thử lại.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const generateScenePromptsFromAnalysis = async () => {
+    if (!analysisResult) return;
+    if (!ai) {
+      alert('Chưa cấu hình API Key. Vui lòng thiết lập GEMINI_API_KEY.');
+      return;
+    }
+    setIsGeneratingScenesFromAnalysis(true);
+    try {
+      const prompt = `Dựa vào nội dung phân tích dưới đây, hãy tạo ra các prompt chi tiết cho trình tạo video AI (Veo 3.1) để tạo ra các video mang phong cách, nội dung và chất lượng tương tự như video gốc. Mỗi prompt mô tả một cảnh ngắn (2-3 giây) để tái hiện lại các phân cảnh nổi bật hoặc xây dựng một câu chuyện có cùng vibe. Trả về kết quả dưới dạng một mảng JSON chứa các chuỗi prompt.
+      
+      Nội dung phân tích:
+      ${analysisResult}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.STRING
+            }
+          }
+        }
+      });
+
+      if (response.text) {
+        const results = JSON.parse(response.text);
+        if (Array.isArray(results)) {
+          setAnalysisScenePrompts(results);
+        }
+      }
+    } catch (error) {
+      console.error('Error generating scenes from analysis:', error);
+      alert('Có lỗi xảy ra khi tạo prompt. Vui lòng thử lại.');
+    } finally {
+      setIsGeneratingScenesFromAnalysis(false);
+    }
+  };
+
+  const handleAnalysisVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAnalysisVideoFile(file);
+    setAnalysisVideoUrl(URL.createObjectURL(file));
+    setGeminiFileUri(null);
+    setAnalysisResult('');
+    setAnalysisScenePrompts([]);
+  };
+
+  const handleRemoveAnalysisVideo = () => {
+    setAnalysisVideoFile(null);
+    setAnalysisVideoUrl(null);
+    setGeminiFileUri(null);
+    setAnalysisResult('');
+    setAnalysisScenePrompts([]);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -420,6 +586,15 @@ export default function App() {
         {/* Tabs */}
         <div className="flex gap-2 mb-5">
           <button
+            className={`px-6 py-2.5 text-[1rem] font-semibold rounded-t-lg transition-all border ${activeTab === 'analysis'
+              ? 'bg-sky-100 text-blue-500 border-blue-500 border-b-2 active-tab'
+              : 'bg-white text-slate-500 border-[#E2E8F0] hover:bg-gray-50'
+              }`}
+            onClick={() => setActiveTab('analysis')}
+          >
+            Phân tích
+          </button>
+          <button
             className={`px-6 py-2.5 text-[1rem] font-semibold rounded-t-lg transition-all border ${activeTab === 'scene'
               ? 'bg-sky-100 text-blue-500 border-blue-500 border-b-2 active-tab'
               : 'bg-white text-slate-500 border-[#E2E8F0] hover:bg-gray-50'
@@ -467,8 +642,112 @@ export default function App() {
             </div>
           </div>
 
-          {activeTab === 'scene' ? (
+          {activeTab === 'analysis' ? (
             <div className="flex flex-col flex-1">
+              <div className="mb-5 pb-5 border-b border-slate-100">
+                <label className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500 mb-2 block">
+                  Video cần phân tích
+                </label>
+                <div className="flex gap-3">
+                  {analysisVideoUrl ? (
+                    <div className="relative w-48 h-32 rounded-lg border-2 border-blue-500 overflow-hidden group bg-black flex items-center justify-center">
+                      <video src={analysisVideoUrl} className="w-full h-full object-contain" controls />
+                      <button
+                        onClick={handleRemoveAnalysisVideo}
+                        className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="w-48 h-32 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-blue-400 hover:text-blue-500 cursor-pointer transition-colors">
+                      <FileVideo size={24} className="mb-2" />
+                      <span className="text-[0.75rem] font-medium uppercase">Tải video lên</span>
+                      <input type="file" accept="video/*" className="hidden" onChange={handleAnalysisVideoUpload} />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end items-center mb-6">
+                <button
+                  onClick={analyzeVideo}
+                  disabled={isAnalyzing || !analysisVideoFile}
+                  className="flex items-center gap-2 px-7 py-3 bg-blue-500 text-white text-[1rem] font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                >
+                  {isAnalyzing ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Sparkles size={16} />
+                  )}
+                  {isAnalyzing ? 'Đang phân tích...' : 'Phân tích Video'}
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 mb-5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="analysisResultInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
+                    Kết quả phân tích (có thể chỉnh sửa)
+                  </label>
+                  <button
+                    onClick={() => handleCopy(analysisResult, 'analysisResult')}
+                    disabled={!analysisResult}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[0.7rem] font-medium rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {copiedIndex === 'analysisResult' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                    {copiedIndex === 'analysisResult' ? 'Đã copy' : 'Copy'}
+                  </button>
+                </div>
+                <textarea
+                  id="analysisResultInput"
+                  value={analysisResult}
+                  onChange={(e) => setAnalysisResult(e.target.value)}
+                  placeholder="Kết quả phân tích video sẽ hiển thị ở đây..."
+                  className="w-full h-48 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
+                />
+              </div>
+
+              <div className="flex justify-center items-center mb-6 pt-4 border-t border-slate-100">
+                <button
+                  onClick={generateScenePromptsFromAnalysis}
+                  disabled={isGeneratingScenesFromAnalysis || !analysisResult.trim()}
+                  className="flex items-center gap-2 px-7 py-3 bg-indigo-500 text-white text-[1rem] font-semibold rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isGeneratingScenesFromAnalysis ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Sparkles size={16} />
+                  )}
+                  {isGeneratingScenesFromAnalysis ? 'Đang tạo...' : 'Tạo nhân vật và prompt'}
+                </button>
+              </div>
+
+              {analysisScenePrompts.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 flex-1">
+                  {analysisScenePrompts.map((prompt, index) => (
+                    <div key={index} className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
+                          Prompt Cảnh {index + 1}
+                        </span>
+                        <button
+                          onClick={() => handleCopy(prompt, `analysisScene${index}`)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer transition-colors"
+                        >
+                          {copiedIndex === `analysisScene${index}` ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                          {copiedIndex === `analysisScene${index}` ? 'Đã copy' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto max-h-[150px] mb-3">
+                        {prompt}
+                      </div>
+                      <VideoBlock prompt={prompt} label={`analysis-scene-${index}`} refImages={refImages} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'scene' ? (
               <div className="flex flex-col md:flex-row gap-5 mb-5">
                 <div className="flex flex-col gap-2 flex-[0.7]">
                   <label htmlFor="scenePromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
@@ -539,65 +818,65 @@ export default function App() {
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col flex-1">
-              <div className="flex flex-col gap-2 mb-5">
-                <label htmlFor="endingPromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
-                  Prompt mô tả cảnh kết thúc
-                </label>
-                <textarea
-                  id="endingPromptInput"
-                  value={endingPrompt}
-                  onChange={(e) => setEndingPrompt(e.target.value)}
-                  placeholder="Ví dụ: Cảnh hoàng hôn trên biển, logo Cypher Runic hiện ra, kèm theo thông tin liên hệ..."
-                  className="w-full h-32 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
-                />
-              </div>
+        ) : (
+        <div className="flex flex-col flex-1">
+          <div className="flex flex-col gap-2 mb-5">
+            <label htmlFor="endingPromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
+              Prompt mô tả cảnh kết thúc
+            </label>
+            <textarea
+              id="endingPromptInput"
+              value={endingPrompt}
+              onChange={(e) => setEndingPrompt(e.target.value)}
+              placeholder="Ví dụ: Cảnh hoàng hôn trên biển, logo Cypher Runic hiện ra, kèm theo thông tin liên hệ..."
+              className="w-full h-32 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
+            />
+          </div>
 
-              <div className="flex justify-end items-center mb-6">
+          <div className="flex justify-end items-center mb-6">
+            <button
+              id="createEndingBtn"
+              onClick={generateEnding}
+              disabled={isGeneratingEnding || !endingPrompt.trim()}
+              className="flex items-center gap-2 px-7 py-3 bg-blue-500 text-white text-[1rem] font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            >
+              {isGeneratingEnding ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              {isGeneratingEnding ? 'Đang tạo...' : 'Tạo cảnh kết'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 flex-1">
+            <div className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
+                  Prompt Cảnh Kết
+                </span>
                 <button
-                  id="createEndingBtn"
-                  onClick={generateEnding}
-                  disabled={isGeneratingEnding || !endingPrompt.trim()}
-                  className="flex items-center gap-2 px-7 py-3 bg-blue-500 text-white text-[1rem] font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  onClick={() => handleCopy(endingResult, 'ending')}
+                  disabled={!endingResult}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isGeneratingEnding ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Sparkles size={16} />
-                  )}
-                  {isGeneratingEnding ? 'Đang tạo...' : 'Tạo cảnh kết'}
+                  {copiedIndex === 'ending' ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                  {copiedIndex === 'ending' ? 'Đã copy' : 'Copy'}
                 </button>
               </div>
-
-              <div className="grid grid-cols-1 gap-4 flex-1">
-                <div className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
-                      Prompt Cảnh Kết
-                    </span>
-                    <button
-                      onClick={() => handleCopy(endingResult, 'ending')}
-                      disabled={!endingResult}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {copiedIndex === 'ending' ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                      {copiedIndex === 'ending' ? 'Đã copy' : 'Copy'}
-                    </button>
-                  </div>
-                  <div
-                    id="endingResult"
-                    className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto h-[180px]"
-                  >
-                    {endingResult || <span className="text-slate-500 italic">Chưa có dữ liệu...</span>}
-                  </div>
-                  <VideoBlock prompt={endingResult} label="ending" refImages={refImages} />
-                </div>
+              <div
+                id="endingResult"
+                className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto h-[180px]"
+              >
+                {endingResult || <span className="text-slate-500 italic">Chưa có dữ liệu...</span>}
               </div>
+              <VideoBlock prompt={endingResult} label="ending" refImages={refImages} />
             </div>
-          )}
+          </div>
         </div>
+          )}
       </div>
     </div>
+    </div >
   );
 }
