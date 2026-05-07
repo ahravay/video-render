@@ -370,7 +370,7 @@ Hãy phân tích chi tiết và đưa ra prompt bằng tiếng Anh để tạo n
 Phần 2 - Phân tích cảnh và prompt Veo 3.1:
 Hãy xem xét tổng thời lượng video, sau đó chia video thành các đoạn ngắn (mỗi đoạn tối đa 8 giây) sao cho việc cắt cảnh/chuyển cảnh tự nhiên và hợp lý. Ưu tiên cắt tại điểm chuyển cảnh tự nhiên (thay đổi góc quay, thay đổi bối cảnh, thay đổi hành động), không cắt giữa chừng một hành động hoặc câu nói. Ví dụ: video 27s có thể chia thành 5 đoạn (6s+5s+6s+7s+3s).
 
-Với mỗi đoạn, hãy viết một prompt chi tiết bằng tiếng Anh để nhập vào Veo 3.1 nhằm tạo ra video tương tự đoạn đó. Prompt phải bao gồm: mô tả cảnh quay (góc máy, chuyển động camera), nội dung diễn ra trong đoạn, nhân vật và hành động, phong cách hình ảnh, ánh sáng, màu sắc, âm thanh/nhạc nền (nếu có) và tâm trạng tổng thể.
+Với mỗi đoạn, hãy viết một prompt chi tiết, bắt buộc đồng nhất nhân vậy, nội dung prompt bằng tiếng Anh để nhập vào Veo 3.1 nhằm tạo ra video tương tự đoạn đó. Prompt phải bao gồm: mô tả cảnh quay (góc máy, chuyển động camera), nội dung diễn ra trong đoạn, nhân vật và hành động, phong cách hình ảnh, ánh sáng, màu sắc, âm thanh/nhạc nền (nếu có) và tâm trạng tổng thể. Hãy viết mô tả thật chi tiết, không quá ngắn, độ dài 1 prompt khoảng 10 dòng.
 
 Trả về kết quả theo đúng định dạng JSON sau (không thêm bất kỳ text nào ngoài JSON):
 {
@@ -848,65 +848,65 @@ Trả về kết quả theo đúng định dạng JSON sau (không thêm bất k
                 ))}
               </div>
             </div>
-        ) : (
-        <div className="flex flex-col flex-1">
-          <div className="flex flex-col gap-2 mb-5">
-            <label htmlFor="endingPromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
-              Prompt mô tả cảnh kết thúc
-            </label>
-            <textarea
-              id="endingPromptInput"
-              value={endingPrompt}
-              onChange={(e) => setEndingPrompt(e.target.value)}
-              placeholder="Ví dụ: Cảnh hoàng hôn trên biển, logo Cypher Runic hiện ra, kèm theo thông tin liên hệ..."
-              className="w-full h-32 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
-            />
-          </div>
+          ) : (
+            <div className="flex flex-col flex-1">
+              <div className="flex flex-col gap-2 mb-5">
+                <label htmlFor="endingPromptInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
+                  Prompt mô tả cảnh kết thúc
+                </label>
+                <textarea
+                  id="endingPromptInput"
+                  value={endingPrompt}
+                  onChange={(e) => setEndingPrompt(e.target.value)}
+                  placeholder="Ví dụ: Cảnh hoàng hôn trên biển, logo Cypher Runic hiện ra, kèm theo thông tin liên hệ..."
+                  className="w-full h-32 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
+                />
+              </div>
 
-          <div className="flex justify-end items-center mb-6">
-            <button
-              id="createEndingBtn"
-              onClick={generateEnding}
-              disabled={isGeneratingEnding || !endingPrompt.trim()}
-              className="flex items-center gap-2 px-7 py-3 bg-blue-500 text-white text-[1rem] font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            >
-              {isGeneratingEnding ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Sparkles size={16} />
-              )}
-              {isGeneratingEnding ? 'Đang tạo...' : 'Tạo cảnh kết'}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 flex-1">
-            <div className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
-                  Prompt Cảnh Kết
-                </span>
+              <div className="flex justify-end items-center mb-6">
                 <button
-                  onClick={() => handleCopy(endingResult, 'ending')}
-                  disabled={!endingResult}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  id="createEndingBtn"
+                  onClick={generateEnding}
+                  disabled={isGeneratingEnding || !endingPrompt.trim()}
+                  className="flex items-center gap-2 px-7 py-3 bg-blue-500 text-white text-[1rem] font-semibold rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                 >
-                  {copiedIndex === 'ending' ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                  {copiedIndex === 'ending' ? 'Đã copy' : 'Copy'}
+                  {isGeneratingEnding ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Sparkles size={16} />
+                  )}
+                  {isGeneratingEnding ? 'Đang tạo...' : 'Tạo cảnh kết'}
                 </button>
               </div>
-              <div
-                id="endingResult"
-                className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto h-[180px]"
-              >
-                {endingResult || <span className="text-slate-500 italic">Chưa có dữ liệu...</span>}
+
+              <div className="grid grid-cols-1 gap-4 flex-1">
+                <div className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
+                      Prompt Cảnh Kết
+                    </span>
+                    <button
+                      onClick={() => handleCopy(endingResult, 'ending')}
+                      disabled={!endingResult}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {copiedIndex === 'ending' ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                      {copiedIndex === 'ending' ? 'Đã copy' : 'Copy'}
+                    </button>
+                  </div>
+                  <div
+                    id="endingResult"
+                    className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto h-[180px]"
+                  >
+                    {endingResult || <span className="text-slate-500 italic">Chưa có dữ liệu...</span>}
+                  </div>
+                  <VideoBlock prompt={endingResult} label="ending" refImages={refImages} />
+                </div>
               </div>
-              <VideoBlock prompt={endingResult} label="ending" refImages={refImages} />
             </div>
-          </div>
-        </div>
           )}
+        </div>
       </div>
-    </div>
     </div >
   );
 }
