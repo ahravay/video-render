@@ -260,8 +260,8 @@ export default function App() {
   const [analysisVideoUrl, setAnalysisVideoUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisScenePrompts, setAnalysisScenePrompts] = useState<string[]>([]);
-  const [isGeneratingScenesFromAnalysis, setIsGeneratingScenesFromAnalysis] = useState(false);
+  const [characterPrompt, setCharacterPrompt] = useState('');
+  const [videoSegments, setVideoSegments] = useState<{ index: number; duration: number; prompt: string }[]>([]);
   const [geminiFileUri, setGeminiFileUri] = useState<string | null>(null);
 
   // Tab 1 state
@@ -290,7 +290,8 @@ export default function App() {
     setAnalysisVideoUrl(null);
     setGeminiFileUri(null);
     setAnalysisResult('');
-    setAnalysisScenePrompts([]);
+    setCharacterPrompt('');
+    setVideoSegments([]);
   };
 
   const uploadVideoToGemini = async (file: File) => {
@@ -349,7 +350,8 @@ export default function App() {
     }
     setIsAnalyzing(true);
     setAnalysisResult('');
-    setAnalysisScenePrompts([]);
+    setCharacterPrompt('');
+    setVideoSegments([]);
     try {
       let currentFileUri = geminiFileUri;
 
@@ -360,8 +362,25 @@ export default function App() {
         setGeminiFileUri(currentFileUri);
       }
 
+      const prompt = `Hãy phân tích chi tiết video này và trả về kết quả theo đúng định dạng JSON bên dưới.
 
-      const prompt = `Hãy phân tích chi tiết video này để tôi có thể tạo ra các video có phong cách và nội dung tương tự. Vui lòng cung cấp: 1. Mô tả chi tiết ngoại hình, trang phục, và đặc điểm nhận dạng của các nhân vật chính để có thể tái tạo lại một cách nhất quán. 2. Tóm tắt nội dung, bối cảnh, cốt truyện, và phong cách hình ảnh (art style, lighting, camera angles) của video. 3. Phân tích cách video triển khai nội dung để tạo điểm nhấn thu hút người xem (hook, pacing, trend). 4. Đưa ra các chỉ dẫn cụ thể để xây dựng prompt tái hiện lại cảm giác và chất lượng của video gốc.`;
+Phần 1 - Prompt tạo nhân vật:
+Hãy phân tích chi tiết và đưa ra prompt bằng tiếng Anh để tạo nhân vật giống như trong video mẫu. Càng chi tiết càng tốt, bao gồm: ngoại hình (khuôn mặt, kiểu tóc, màu tóc, màu mắt, vóc dáng, chiều cao ước lượng), trang phục (màu sắc, chất liệu, phong cách, phụ kiện), phong cách diễn xuất/biểu cảm, ánh sáng chiếu vào nhân vật, và bất kỳ đặc điểm nhận dạng nào giúp tái tạo nhân vật nhất quán trong các video khác nhau.
+
+Phần 2 - Phân tích cảnh và prompt Veo 3.1:
+Hãy xem xét tổng thời lượng video, sau đó chia video thành các đoạn ngắn (mỗi đoạn tối đa 8 giây) sao cho việc cắt cảnh/chuyển cảnh tự nhiên và hợp lý. Ưu tiên cắt tại điểm chuyển cảnh tự nhiên (thay đổi góc quay, thay đổi bối cảnh, thay đổi hành động), không cắt giữa chừng một hành động hoặc câu nói. Ví dụ: video 27s có thể chia thành 5 đoạn (6s+5s+6s+7s+3s).
+
+Với mỗi đoạn, hãy viết một prompt chi tiết bằng tiếng Anh để nhập vào Veo 3.1 nhằm tạo ra video tương tự đoạn đó. Prompt phải bao gồm: mô tả cảnh quay (góc máy, chuyển động camera), nội dung diễn ra trong đoạn, nhân vật và hành động, phong cách hình ảnh, ánh sáng, màu sắc, âm thanh/nhạc nền (nếu có) và tâm trạng tổng thể.
+
+Trả về kết quả theo đúng định dạng JSON sau (không thêm bất kỳ text nào ngoài JSON):
+{
+  "characterPrompt": "prompt chi tiết tạo nhân vật bằng tiếng Anh...",
+  "segments": [
+    { "index": 1, "duration": 6, "prompt": "prompt chi tiết cho đoạn 1 bằng tiếng Anh..." },
+    { "index": 2, "duration": 5, "prompt": "prompt chi tiết cho đoạn 2 bằng tiếng Anh..." }
+  ]
+}`;
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: [
@@ -372,58 +391,46 @@ export default function App() {
               { text: prompt }
             ]
           }
-        ]
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              characterPrompt: { type: Type.STRING },
+              segments: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    index: { type: Type.NUMBER },
+                    duration: { type: Type.NUMBER },
+                    prompt: { type: Type.STRING }
+                  },
+                  required: ['index', 'duration', 'prompt']
+                }
+              }
+            },
+            required: ['characterPrompt', 'segments']
+          }
+        }
       });
 
       if (response.text) {
+        const parsed = JSON.parse(response.text);
         setAnalysisResult(response.text);
+        if (parsed.characterPrompt) {
+          setCharacterPrompt(parsed.characterPrompt);
+        }
+        if (Array.isArray(parsed.segments)) {
+          setVideoSegments(parsed.segments);
+        }
       }
     } catch (error: any) {
       console.error('Error analyzing video:', error);
       alert(error.message || 'Có lỗi xảy ra khi phân tích video. Vui lòng thử lại.');
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  const generateScenePromptsFromAnalysis = async () => {
-    if (!analysisResult) return;
-    if (!ai) {
-      alert('Chưa cấu hình API Key. Vui lòng thiết lập GEMINI_API_KEY.');
-      return;
-    }
-    setIsGeneratingScenesFromAnalysis(true);
-    try {
-      const prompt = `Dựa vào nội dung phân tích dưới đây, hãy tạo ra các prompt chi tiết cho trình tạo video AI (Veo 3.1) để tạo ra các video mang phong cách, nội dung và chất lượng tương tự như video gốc. Mỗi prompt mô tả một cảnh ngắn (2-3 giây) để tái hiện lại các phân cảnh nổi bật hoặc xây dựng một câu chuyện có cùng vibe. Trả về kết quả dưới dạng một mảng JSON chứa các chuỗi prompt.
-      
-      Nội dung phân tích:
-      ${analysisResult}`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.STRING
-            }
-          }
-        }
-      });
-
-      if (response.text) {
-        const results = JSON.parse(response.text);
-        if (Array.isArray(results)) {
-          setAnalysisScenePrompts(results);
-        }
-      }
-    } catch (error) {
-      console.error('Error generating scenes from analysis:', error);
-      alert('Có lỗi xảy ra khi tạo prompt. Vui lòng thử lại.');
-    } finally {
-      setIsGeneratingScenesFromAnalysis(false);
     }
   };
 
@@ -434,7 +441,8 @@ export default function App() {
     setAnalysisVideoUrl(URL.createObjectURL(file));
     setGeminiFileUri(null);
     setAnalysisResult('');
-    setAnalysisScenePrompts([]);
+    setCharacterPrompt('');
+    setVideoSegments([]);
   };
 
   const handleRemoveAnalysisVideo = () => {
@@ -442,7 +450,8 @@ export default function App() {
     setAnalysisVideoUrl(null);
     setGeminiFileUri(null);
     setAnalysisResult('');
-    setAnalysisScenePrompts([]);
+    setCharacterPrompt('');
+    setVideoSegments([]);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,11 +479,41 @@ export default function App() {
   const handleCopy = async (text: string, id: string | number) => {
     if (!text) return;
     try {
-      await navigator.clipboard.writeText(text);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
       setCopiedIndex(id);
       setTimeout(() => setCopiedIndex(null), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
+      // Last resort fallback
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        setCopiedIndex(id);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      } catch (e) {
+        console.error('Fallback copy also failed: ', e);
+      }
     }
   };
 
@@ -684,66 +723,56 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-2 mb-5">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="analysisResultInput" className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
-                    Kết quả phân tích (có thể chỉnh sửa)
-                  </label>
-                  <button
-                    onClick={() => handleCopy(analysisResult, 'analysisResult')}
-                    disabled={!analysisResult}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[0.7rem] font-medium rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {copiedIndex === 'analysisResult' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                    {copiedIndex === 'analysisResult' ? 'Đã copy' : 'Copy'}
-                  </button>
+              {/* Character Prompt Section */}
+              {characterPrompt && (
+                <div className="flex flex-col gap-2 mb-5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
+                      Prompt tạo nhân vật
+                    </label>
+                    <button
+                      onClick={() => handleCopy(characterPrompt, 'characterPrompt')}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[0.7rem] font-medium rounded cursor-pointer transition-colors"
+                    >
+                      {copiedIndex === 'characterPrompt' ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+                      {copiedIndex === 'characterPrompt' ? 'Đã copy' : 'Copy'}
+                    </button>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-4">
+                    <pre className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed whitespace-pre-wrap break-words overflow-y-auto max-h-[200px]">
+                      {characterPrompt}
+                    </pre>
+                  </div>
                 </div>
-                <textarea
-                  id="analysisResultInput"
-                  value={analysisResult}
-                  onChange={(e) => setAnalysisResult(e.target.value)}
-                  placeholder="Kết quả phân tích video sẽ hiển thị ở đây..."
-                  className="w-full h-48 p-3 border-[1.5px] border-[#E2E8F0] rounded-lg text-[0.95rem] focus:ring-0 focus:border-blue-500 outline-none resize-none transition-colors"
-                />
-              </div>
+              )}
 
-              <div className="flex justify-center items-center mb-6 pt-4 border-t border-slate-100">
-                <button
-                  onClick={generateScenePromptsFromAnalysis}
-                  disabled={isGeneratingScenesFromAnalysis || !analysisResult.trim()}
-                  className="flex items-center gap-2 px-7 py-3 bg-indigo-500 text-white text-[1rem] font-semibold rounded-lg hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isGeneratingScenesFromAnalysis ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Sparkles size={16} />
-                  )}
-                  {isGeneratingScenesFromAnalysis ? 'Đang tạo...' : 'Tạo nhân vật và prompt'}
-                </button>
-              </div>
-
-              {analysisScenePrompts.length > 0 && (
-                <div className="grid grid-cols-1 gap-4 flex-1">
-                  {analysisScenePrompts.map((prompt, index) => (
-                    <div key={index} className="bg-slate-900 rounded-lg p-4 flex flex-col relative">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
-                          Prompt Cảnh {index + 1}
-                        </span>
-                        <button
-                          onClick={() => handleCopy(prompt, `analysisScene${index}`)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer transition-colors"
-                        >
-                          {copiedIndex === `analysisScene${index}` ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                          {copiedIndex === `analysisScene${index}` ? 'Đã copy' : 'Copy'}
-                        </button>
+              {/* Video Segments Section */}
+              {videoSegments.length > 0 && (
+                <div className="flex flex-col gap-4 flex-1">
+                  <label className="text-[0.85rem] font-semibold uppercase tracking-[0.05em] text-slate-500">
+                    Phân đoạn video — Prompt Veo 3.1
+                  </label>
+                  <div className="grid grid-cols-1 gap-4">
+                    {videoSegments.map((segment) => (
+                      <div key={segment.index} className="bg-slate-900 rounded-lg p-4 flex flex-col">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[#94A3B8] text-[0.75rem] font-semibold uppercase">
+                            Đoạn {segment.index} ({segment.duration}s)
+                          </span>
+                          <button
+                            onClick={() => handleCopy(segment.prompt, `segment${segment.index}`)}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-white/10 hover:bg-white/20 text-[#CBD5E1] text-[0.7rem] rounded cursor-pointer transition-colors"
+                          >
+                            {copiedIndex === `segment${segment.index}` ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                            {copiedIndex === `segment${segment.index}` ? 'Đã copy' : 'Copy'}
+                          </button>
+                        </div>
+                        <pre className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed whitespace-pre-wrap break-words overflow-y-auto max-h-[150px]">
+                          {segment.prompt}
+                        </pre>
                       </div>
-                      <div className="text-[#F8FAFC] font-mono text-[0.85rem] leading-relaxed break-all overflow-y-auto max-h-[150px] mb-3">
-                        {prompt}
-                      </div>
-                      <VideoBlock prompt={prompt} label={`analysis-scene-${index}`} refImages={refImages} />
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
