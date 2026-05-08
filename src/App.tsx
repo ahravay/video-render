@@ -365,12 +365,12 @@ export default function App() {
       const prompt = `Hãy phân tích chi tiết video này và trả về kết quả theo đúng định dạng JSON bên dưới.
 
 Phần 1 - Prompt tạo nhân vật:
-Hãy phân tích chi tiết và đưa ra prompt bằng tiếng Anh để tạo nhân vật giống như trong video mẫu. Càng chi tiết càng tốt, bao gồm: ngoại hình (khuôn mặt, kiểu tóc, màu tóc, màu mắt, vóc dáng, chiều cao ước lượng), trang phục (màu sắc, chất liệu, phong cách, phụ kiện), phong cách diễn xuất/biểu cảm, ánh sáng chiếu vào nhân vật, và bất kỳ đặc điểm nhận dạng nào giúp tái tạo nhân vật nhất quán trong các video khác nhau.
+Hãy phân tích chi tiết và đưa ra prompt bằng tiếng Anh để tạo nhân vật giống như trong video mẫu. Càng chi tiết càng tốt, bao gồm: ngoại hình (khuôn mặt, kiểu tóc, màu tóc, màu mắt, vóc dáng, chiều cao ước lượng), trang phục (màu sắc, chất liệu, phong cách, phụ kiện), phong cách diễn xuất/biểu cảm, ánh sáng chiếu vào nhân vật, và bất kỳ đặc điểm nhận dạng nào giúp tái tạo nhân vật nhất quán trong các video khác nhau. IMPORTANT: nhân vật là người Việt Nam.
 
 Phần 2 - Phân tích cảnh và prompt Veo 3.1:
 Hãy xem xét tổng thời lượng video, sau đó chia video thành các đoạn ngắn (mỗi đoạn tối đa 8 giây) sao cho việc cắt cảnh/chuyển cảnh tự nhiên và hợp lý. Ưu tiên cắt tại điểm chuyển cảnh tự nhiên (thay đổi góc quay, thay đổi bối cảnh, thay đổi hành động), không cắt giữa chừng một hành động hoặc câu nói. Ví dụ: video 27s có thể chia thành 5 đoạn (6s+5s+6s+7s+3s).
 
-Với mỗi đoạn, hãy viết một prompt chi tiết, bắt buộc đồng nhất nhân vậy, nội dung prompt bằng tiếng Anh để nhập vào Veo 3.1 nhằm tạo ra video tương tự đoạn đó. Prompt phải bao gồm: mô tả cảnh quay (góc máy, chuyển động camera), nội dung diễn ra trong đoạn, nhân vật và hành động, phong cách hình ảnh, ánh sáng, màu sắc, âm thanh/nhạc nền (nếu có) và tâm trạng tổng thể. Hãy viết mô tả thật chi tiết, không quá ngắn, độ dài 1 prompt khoảng 10 dòng.
+Với mỗi đoạn, hãy viết một prompt chi tiết, bắt buộc đồng nhất nhân vậy, nội dung prompt bằng tiếng Anh để nhập vào Veo 3.1 nhằm tạo ra video tương tự đoạn đó. Prompt phải bao gồm: mô tả cảnh quay (góc máy, chuyển động camera zoom-in, zoom-out, quay từ trên xuống, quay từ dưới lên, quay ngang, quay nghiêng, quay toàn cảnh, quay cận cảnh), nội dung diễn ra trong đoạn, nhân vật và hành động, phong cách hình ảnh, ánh sáng, màu sắc, âm thanh/nhạc nền (nếu có) và tâm trạng tổng thể. Hãy viết mô tả thật chi tiết, không quá ngắn, độ dài 1 prompt khoảng 10 dòng trở lên. IMPORTANT: prompt cần chia ra các gạch đầu dòng về hình ảnh, góc quay, hành động của nhân vật...để Veo 3.1 hiểu chính xác.
 
 Trả về kết quả theo đúng định dạng JSON sau (không thêm bất kỳ text nào ngoài JSON):
 {
